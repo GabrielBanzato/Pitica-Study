@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String   @default("Lê")
+  streak    Int      @default(0)
+  xp        Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  progress UserProgress[]
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  name      String   // ex: Farmacologia
+  createdAt DateTime @default(now())
+
+  classes   Class[]
+  tasks     Task[]
+}
+
+model Class {
+  id          String   @id @default(uuid())
+  subjectId   String
+  title       String   // ex: Aula 04 - Farmacocinética
+  videoPath   String?
+  transcript  String?
+  status      String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  createdAt   DateTime @default(now())
+
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topics      Topic[]
+}
+
+model Topic {
+  id               String         @id @default(uuid())
+  classId          String
+  class            Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  name             String
+  summary          String?
+
+  // Versão Fashion
+  fashionSummary   String?
+  fashionText      String?
+
+  // Versão Científica Meiga
+  academicSummary  String?
+  academicText     String?
+
+  questions        Question[]
+  userProgress     UserProgress[]
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  subjectId   String
+  imagePath   String
+  rawText     String?  // Texto extraído via OCR
+  createdAt   DateTime @default(now())
+
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+
+model Question {
+  id             String   @id @default(uuid())
+  topicId        String
+  topic          Topic    @relation(fields: [topicId], references: [id])
+  statement      String
+  options        Json
+  answer         String
+  explanation    String
+  difficulty     String   @default("MEDIUM")
+  
+  // Controle de Repetição Espaçada
+  correctCount   Int      @default(0)
+  incorrectCount Int      @default(0)
+  isMastered     Boolean  @default(false)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+}
+model UserProgress {
+  id         String   @id @default(uuid())
+  userId     String
+  topicId    String
+  mastery    Int      @default(0) // 0 a 100%
+  nextReview DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic      Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+}

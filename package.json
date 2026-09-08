@@ -1,0 +1,20 @@
+{
+  "name": "pitica-study",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down"
+  },
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.5"
+  }
+}

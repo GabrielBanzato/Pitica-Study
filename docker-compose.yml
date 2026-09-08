@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pitica_study_db
+    restart: always
+    environment:
+      POSTGRES_USER: pitica
+      POSTGRES_PASSWORD: piticapassword
+      POSTGRES_DB: pitica_study
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
