@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # Seu banco de dados original (intacto)
   postgres:
     image: postgres:16-alpine
     container_name: pitica_study_db
@@ -11,6 +14,45 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - pitica_net
+
+  # API (Fastify + Assistente Sunfl.IA.wer)
+  api:
+    build:
+      context: . # Mudei para a raiz para o build context
+      dockerfile: apps/api/Dockerfile # Apontei o Dockerfile explicitamente
+    container_name: pitica_api
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://pitica:piticapassword@postgres:5432/pitica_study
+      - GEMINI_API_KEY=AQ.Ab8RN6LZtKkiXX0bapP2paeKo56ZPR8hOMZzRqSiiuzuaN4Yyw
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - pitica_net
+
+  # Web (React)
+  web:
+    build:
+      context: . # Mudei para a raiz
+      dockerfile: apps/web/Dockerfile # Apontei o Dockerfile explicitamente
+    container_name: pitica_web
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - pitica_net
 
 volumes:
   pgdata:
+
+networks:
+  pitica_net:
+    driver: bridge
