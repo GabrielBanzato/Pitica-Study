@@ -18,7 +18,7 @@ services:
 
   api:
     build:
-      context: .
+      context: https://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@github.com/GabrielBanzato/Pitica-Study.git#main
       dockerfile: apps/api/Dockerfile
     container_name: pitica_api
     restart: always
@@ -36,7 +36,7 @@ services:
 
   web:
     build:
-      context: .
+      context: https://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@github.com/GabrielBanzato/Pitica-Study.git#main
       dockerfile: apps/web/Dockerfile
     container_name: pitica_web
     restart: always
