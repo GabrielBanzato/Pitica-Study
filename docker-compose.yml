@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Seu banco de dados original (intacto)
   postgres:
     image: postgres:16-alpine
     container_name: pitica_study_db
@@ -17,11 +16,10 @@ services:
     networks:
       - pitica_net
 
-  # API (Fastify + Assistente Sunfl.IA.wer)
   api:
     build:
-      context: . # Mudei para a raiz para o build context
-      dockerfile: apps/api/Dockerfile # Apontei o Dockerfile explicitamente
+      context: .
+      dockerfile: apps/api/Dockerfile
     container_name: pitica_api
     restart: always
     environment:
@@ -36,11 +34,10 @@ services:
     networks:
       - pitica_net
 
-  # Web (React)
   web:
     build:
-      context: . # Mudei para a raiz
-      dockerfile: apps/web/Dockerfile # Apontei o Dockerfile explicitamente
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: pitica_web
     restart: always
     ports:
