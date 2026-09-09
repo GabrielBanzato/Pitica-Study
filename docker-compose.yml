@@ -18,8 +18,8 @@ services:
 
   api:
     build:
-      context: https://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@github.com/GabrielBanzato/Pitica-Study.git#main
-      dockerfile: apps/api/Dockerfile
+      context: ./apps/api
+      dockerfile: Dockerfile
     container_name: pitica_api
     restart: always
     environment:
@@ -36,8 +36,8 @@ services:
 
   web:
     build:
-      context: https://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@github.com/GabrielBanzato/Pitica-Study.git#main
-      dockerfile: apps/web/Dockerfile
+      context: ./apps/web
+      dockerfile: Dockerfile
     container_name: pitica_web
     restart: always
     ports:
