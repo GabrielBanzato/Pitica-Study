@@ -4,6 +4,11 @@
 # Portainer (Stack > Environment variables):
 #   TUNNEL_TOKEN   = token do Cloudflare Tunnel
 #   GEMINI_API_KEY = chave da API do Google Gemini
+#   JWT_SECRET     = segredo dos tokens de login (mín. 32 caracteres)
+#   ALLOW_REGISTRATION = true só se quiser liberar o cadastro público (padrão: false)
+#
+# Criar/redefinir usuário (Portainer > container pitica_api > Console):
+#   npx tsx src/scripts/create-user.ts <email> <senha> [nome]
 #
 # Cloudflare (Zero Trust > Tunnels > Public Hostname):
 #   Service: HTTP  ->  web:80
@@ -41,6 +46,8 @@ services:
       DATABASE_URL: postgresql://pitica:piticapassword@postgres:5432/pitica_study?schema=public
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
     volumes:
       - uploads:/app/apps/api/uploads
     depends_on:

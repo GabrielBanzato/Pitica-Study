@@ -84,7 +84,7 @@ REGRAS:
 
     const [question, user] = await Promise.all([
       prisma.question.findUnique({ where: { id: questionId } }),
-      prisma.user.findFirst({ where: { name: 'Lê' } }),
+      prisma.user.findUnique({ where: { id: request.user.sub }, select: { id: true, streak: true } }),
     ]);
     if (!question) {
       return reply.status(404).send({ error: 'Questão não encontrada' });

@@ -124,6 +124,26 @@ h1, h2, h3, p, span, strong {
   color: var(--text);
 }
 
+.btn-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (hover: hover) {
+  .btn-logout:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+}
+
 @media (min-width: 640px) {
   .header {
     flex-direction: row;
@@ -749,4 +769,106 @@ h1, h2, h3, p, span, strong {
   margin-top: 16px;
   font-size: 14px;
   text-align: center;
+}
+
+/* ---------- Login / Cadastro ---------- */
+
+.auth-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(20px, 6vw, 40px) var(--gutter);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--card-pad);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.auth-card__brand {
+  margin-bottom: 20px;
+}
+
+.auth-card__title {
+  font-size: clamp(20px, 5.5vw, 24px);
+  color: #fff;
+}
+
+.auth-card__subtitle {
+  margin: 6px 0 24px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.field input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  font-size: 16px; /* evita o zoom automático do iOS */
+  font-weight: 400;
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.auth-error {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: #7f1d1d;
+  border: 1px solid #dc2626;
+  color: #fecaca;
+  font-size: 14px;
+}
+
+.auth-switch {
+  margin-top: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.auth-switch a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-splash {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
 }

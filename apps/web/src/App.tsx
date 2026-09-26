@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Video, Image, Heart, Flame, Sparkles, CheckCircle2, XCircle, ArrowRight, BookOpen, Map as MapIcon, Award, ShieldAlert, BookMarked, ToggleLeft, ToggleRight, Send, MessageCircle } from 'lucide-react';
+import { Upload, Video, Image, Heart, Flame, LogOut, Sparkles, CheckCircle2, XCircle, ArrowRight, BookOpen, Map as MapIcon, Award, ShieldAlert, BookMarked, ToggleLeft, ToggleRight, Send, MessageCircle } from 'lucide-react';
+import { useAuth } from './auth/AuthContext';
+import { apiFetch } from './lib/api';
 
 type Tab = 'study' | 'exam' | 'glossary' | 'classes' | 'dashboard' | 'upload';
 
@@ -16,6 +18,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
 
 export function App() {
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('study');
   const [classMessage, setClassMessage] = useState('');
   const [taskMessage, setTaskMessage] = useState('');
@@ -74,7 +77,7 @@ export function App() {
 
   const fetchDashboard = async () => {
     try {
-      const res = await fetch('/api/analytics/dashboard');
+      const res = await apiFetch('/api/analytics/dashboard');
       const data = await res.json();
       setAnalytics(data);
     } catch (err) {
@@ -84,7 +87,7 @@ export function App() {
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch('/api/learning/session');
+      const res = await apiFetch('/api/learning/session');
       const data = await res.json();
       setQuestions(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -95,7 +98,7 @@ export function App() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch('/api/classes');
+      const res = await apiFetch('/api/classes');
       const data = await res.json();
       setClassList(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -106,7 +109,7 @@ export function App() {
 
   const fetchTopics = async () => {
     try {
-      const res = await fetch('/api/classes/topics');
+      const res = await apiFetch('/api/classes/topics');
       const data = await res.json();
       setTopicsList(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -139,7 +142,7 @@ export function App() {
     try {
       const topicContext = selectedTopic.academicText || selectedTopic.summary || selectedTopic.fashionText;
 
-      const res = await fetch('/api/classes/topics/chat', {
+      const res = await apiFetch('/api/classes/topics/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -173,7 +176,7 @@ export function App() {
       // Pergunta que originou esta resposta: a última mensagem da Lê antes dela
       const msgIndex = chatMessages.findIndex(m => m.id === msgId);
       const lastUserMsg = chatMessages.slice(0, msgIndex).reverse().find(m => m.sender === 'user')?.text || '';
-      await fetch('/api/classes/topics/chat/feedback', {
+      await apiFetch('/api/classes/topics/chat/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,7 +199,7 @@ export function App() {
     setExamScore(0);
     setExamSelected(null);
     try {
-      const res = await fetch('/api/learning/exam-session');
+      const res = await apiFetch('/api/learning/exam-session');
       const data = await res.json();
       setExamQuestions(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -230,7 +233,7 @@ export function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/classes/upload', {
+      const res = await apiFetch('/api/classes/upload', {
         method: 'POST', body: formData
       });
       const data = await res.json();
@@ -252,7 +255,7 @@ export function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/tasks/upload', {
+      const res = await apiFetch('/api/tasks/upload', {
         method: 'POST', body: formData
       });
       const data = await res.json();
@@ -266,7 +269,7 @@ export function App() {
   };
 
   const handleReanalyze = async (classId: string) => {
-    await fetch(`/api/classes/reanalyze/${classId}`, { method: 'POST' });
+    await apiFetch(`/api/classes/reanalyze/${classId}`, { method: 'POST' });
     alert('Reanálise iniciada! A Sunfl.IA.wer buscará novos subtópicos.');
     fetchClasses();
   };
@@ -276,7 +279,7 @@ export function App() {
     const currentQ = questions[currentIndex];
 
     try {
-      const res = await fetch('/api/learning/answer', {
+      const res = await apiFetch('/api/learning/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -331,6 +334,9 @@ export function App() {
             <Flame color="#f97316" fill="#f97316" size={18} />
             {analytics?.streak || 0} dias de ofensiva!
           </span>
+          <button type="button" className="btn-logout" onClick={logout} title={user ? `Sair (${user.email})` : 'Sair'}>
+            <LogOut size={16} /> Sair
+          </button>
         </div>
       </header>
 

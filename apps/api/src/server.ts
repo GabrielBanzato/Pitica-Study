@@ -1,25 +1,32 @@
 import { env } from './config/env.js'; // primeiro import: carrega e valida o .env
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyJwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import { prisma } from './lib/prisma.js';
+import { authenticate } from './plugins/auth.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
 import { classesRoutes } from './modules/classes/classes.routes.js';
 import { tasksRoutes } from './modules/tasks/tasks.routes.js';
 import { learningRoutes } from './modules/learning/learning.routes.js';
 import { analyticsRoutes } from './modules/learning/analytics.routes.js';
 
-const app = Fastify({ logger: true });
+// trustProxy: a API fica atrás do nginx (e do Cloudflare), request.ip vem do X-Forwarded-For
+const app = Fastify({ logger: true, trustProxy: true });
 
 app.register(cors, { origin: true });
+
+app.register(fastifyJwt, {
+  secret: env.jwtSecret,
+  sign: { expiresIn: env.jwtExpiresIn },
+});
 
 app.register(multipart, {
   limits: { fileSize: 500 * 1024 * 1024, files: 1 }
 });
 
-app.register(classesRoutes, { prefix: '/api/classes' });
-app.register(tasksRoutes, { prefix: '/api/tasks' });
-app.register(learningRoutes, { prefix: '/api/learning' });
-app.register(analyticsRoutes, { prefix: '/api/analytics' });
+// Rotas públicas
+app.register(authRoutes, { prefix: '/api/auth' });
 
 app.get('/', async () => {
   return {
@@ -27,6 +34,16 @@ app.get('/', async () => {
     status: 'online',
     message: 'Sistema feito com todo o carinho para a Lê! ✨'
   };
+});
+
+// Rotas privadas: todo o restante da API exige Bearer Token válido
+app.register(async (privateScope) => {
+  privateScope.addHook('onRequest', authenticate);
+
+  privateScope.register(classesRoutes, { prefix: '/api/classes' });
+  privateScope.register(tasksRoutes, { prefix: '/api/tasks' });
+  privateScope.register(learningRoutes, { prefix: '/api/learning' });
+  privateScope.register(analyticsRoutes, { prefix: '/api/analytics' });
 });
 
 // Rede de segurança: uma promise esquecida em segundo plano não derruba o servidor
@@ -46,12 +63,6 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 const start = async () => {
   try {
-    const leUser = await prisma.user.findFirst({ where: { name: 'Lê' } });
-    if (!leUser) {
-      await prisma.user.create({ data: { name: 'Lê', streak: 1, xp: 100 } });
-      app.log.info('✨ Usuária Lê cadastrada com sucesso!');
-    }
-
     await app.listen({ port: env.port, host: '0.0.0.0' });
   } catch (err) {
     app.log.error(err);

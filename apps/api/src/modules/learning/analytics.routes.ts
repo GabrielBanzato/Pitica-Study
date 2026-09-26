@@ -2,10 +2,10 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma.js';
 
 export async function analyticsRoutes(app: FastifyInstance) {
-  app.get('/dashboard', async () => {
+  app.get('/dashboard', async (request) => {
     // Consultas independentes em paralelo; tópicos só são contados, não carregados
     const [user, totalQuestions, totalClasses, topicsCount] = await Promise.all([
-      prisma.user.findFirst({ where: { name: 'Lê' } }),
+      prisma.user.findUnique({ where: { id: request.user.sub }, select: { name: true, streak: true, xp: true } }),
       prisma.question.count(),
       prisma.class.count(),
       prisma.topic.count(),

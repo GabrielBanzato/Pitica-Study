@@ -9,6 +9,8 @@ datasource db {
 
 model User {
   id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // hash argon2id — nunca retornar em respostas da API
   name      String   @default("Lê")
   streak    Int      @default(0)
   xp        Int      @default(0)
