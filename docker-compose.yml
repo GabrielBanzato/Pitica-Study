@@ -1,13 +1,7 @@
 # =============================================================
 # Pitica Study - Stack para Portainer (Repository / Git)
 #
-# Variáveis de ambiente a definir no Portainer (Stack > Environment variables):
-#   POSTGRES_PASSWORD   senha do banco (obrigatória)
-#   TUNNEL_TOKEN        token do Cloudflare Tunnel (obrigatória)
-#   OLLAMA_URL          opcional (padrão: Ollama rodando no host)
-#   QWEN_MODEL          opcional (padrão: qwen2.5)
-#
-# No painel da Cloudflare (Zero Trust > Tunnels > Public Hostname):
+# Cloudflare (Zero Trust > Tunnels > Public Hostname):
 #   Service: HTTP  ->  web:80
 # =============================================================
 
@@ -17,13 +11,13 @@ services:
     container_name: pitica_study_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-pitica}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no Portainer}
+      POSTGRES_USER: pitica
+      POSTGRES_PASSWORD: piticapassword
       POSTGRES_DB: pitica_study
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pitica} -d pitica_study"]
+      test: ["CMD-SHELL", "pg_isready -U pitica -d pitica_study"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -40,9 +34,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pitica}:${POSTGRES_PASSWORD}@postgres:5432/pitica_study?schema=public
-      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      QWEN_MODEL: ${QWEN_MODEL:-qwen2.5}
+      DATABASE_URL: postgresql://pitica:piticapassword@postgres:5432/pitica_study?schema=public
+      OLLAMA_URL: http://host.docker.internal:11434
+      QWEN_MODEL: qwen2.5
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -61,7 +55,7 @@ services:
     container_name: pitica_web
     restart: unless-stopped
     ports:
-      - "8080:80"   # acesso local na rede; remova se quiser só via Tunnel
+      - "8080:80"
     depends_on:
       - api
     networks:
@@ -71,9 +65,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: pitica_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN no Portainer}
+    command: tunnel --no-autoupdate run --token SEU_TOKEN_AQUI
     depends_on:
       - web
     networks:
