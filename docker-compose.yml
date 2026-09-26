@@ -28,7 +28,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    image: pitica-study-api:latest
+    pull_policy: build
     container_name: pitica_api
     restart: unless-stopped
     environment:
@@ -51,7 +51,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
-    image: pitica-study-web:latest
+    pull_policy: build
     container_name: pitica_web
     restart: unless-stopped
     ports:
