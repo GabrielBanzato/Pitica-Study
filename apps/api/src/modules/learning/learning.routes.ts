@@ -38,8 +38,9 @@ export async function learningRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' }
     });
 
+    // Sem aulas processadas ainda: não é erro do cliente, só não há simulado
     if (recentTopics.length === 0) {
-      return reply.status(400).send({ error: 'Nenhum tópico encontrado para o simulado.' });
+      return [];
     }
 
     const topicsText = recentTopics.map(t => t.name).join(', ');
@@ -71,9 +72,11 @@ FORMATO ESPERADO:
       const jsonStart = responseText.indexOf('{');
       const jsonEnd = responseText.lastIndexOf('}') + 1;
       
-      if (jsonStart !== -1 && jsonEnd !== -1) {
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
         const parsed = JSON.parse(responseText.substring(jsonStart, jsonEnd));
-        return parsed.questions;
+        if (Array.isArray(parsed?.questions)) {
+          return parsed.questions;
+        }
       }
     } catch (err) {
       console.error('Erro ao gerar Modo Prova:', err);
