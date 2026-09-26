@@ -1,26 +1,27 @@
 import { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../lib/prisma.js';
 
 export async function analyticsRoutes(app: FastifyInstance) {
-  app.get('/dashboard', async (request, reply) => {
-    const user = await prisma.user.findFirst({ where: { name: 'Lê' } });
-    const totalQuestions = await prisma.question.count();
-    const totalClasses = await prisma.class.count();
-    const topics = await prisma.topic.findMany({
-      include: { questions: true }
-    });
+  app.get('/dashboard', async () => {
+    // Consultas independentes em paralelo; tópicos só são contados, não carregados
+    const [user, totalQuestions, totalClasses, topicsCount] = await Promise.all([
+      prisma.user.findFirst({ where: { name: 'Lê' } }),
+      prisma.question.count(),
+      prisma.class.count(),
+      prisma.topic.count(),
+    ]);
+
+    const xp = user?.xp ?? 100;
 
     return {
-      userName: user?.name || 'Lê',
-      streak: user?.streak || 1,
-      xp: user?.xp || 100,
+      userName: user?.name ?? 'Lê',
+      streak: user?.streak ?? 1,
+      xp,
       totalQuestions,
       totalClasses,
-      topicsCount: topics.length,
+      topicsCount,
       // Níveis de evolução temática do Pitica Study
-      levelTitle: user && user.xp > 500 ? 'Top Model Nutri 👑' : user && user.xp > 200 ? 'Fashion Week 👠' : 'New Face 💖'
+      levelTitle: xp > 500 ? 'Top Model Nutri 👑' : xp > 200 ? 'Fashion Week 👠' : 'New Face 💖'
     };
   });
 }

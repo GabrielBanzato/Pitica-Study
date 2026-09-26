@@ -1,15 +1,29 @@
 import { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../lib/prisma.js';
 import { FeedbackEngine } from '../feedback/feedback.service.js';
-import { QwenProvider } from '../ai/qwen.provider.js';
+import { GeminiProvider } from '../ai/gemini.provider.js';
+import { SUN_SYSTEM_INSTRUCTION } from '../ai/question-generator.service.js';
+import { OPTION_KEYS, OptionKey, parseQuestionList, questionListJsonSchema } from '../ai/question.schema.js';
 
-const prisma = new PrismaClient();
+interface AnswerBody {
+  questionId: string;
+  selectedOption: OptionKey;
+}
+
+const answerBodySchema = {
+  type: 'object',
+  required: ['questionId', 'selectedOption'],
+  properties: {
+    questionId: { type: 'string', format: 'uuid' },
+    selectedOption: { type: 'string', enum: [...OPTION_KEYS] },
+  },
+} as const;
 
 export async function learningRoutes(app: FastifyInstance) {
-  
+
   // Buscar questões para a Prática Diária
-  app.get('/session', async (request, reply) => {
-    let questions = await prisma.question.findMany({
+  app.get('/session', async () => {
+    const questions = await prisma.question.findMany({
       where: { isMastered: false },
       orderBy: [
         { incorrectCount: 'desc' },
@@ -20,22 +34,21 @@ export async function learningRoutes(app: FastifyInstance) {
     });
 
     // Fallback: se todas foram dominadas ou não houver não-dominadas, pega as mais recentes
-    if (questions.length === 0) {
-      questions = await prisma.question.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { topic: true }
-      });
-    }
+    if (questions.length > 0) return questions;
 
-    return questions;
+    return prisma.question.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: { topic: true }
+    });
   });
 
   // Modo Prova
-  app.get('/exam-session', async (request, reply) => {
+  app.get('/exam-session', async (request) => {
     const recentTopics = await prisma.topic.findMany({
       take: 5,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      select: { name: true }
     });
 
     // Sem aulas processadas ainda: não é erro do cliente, só não há simulado
@@ -43,90 +56,69 @@ export async function learningRoutes(app: FastifyInstance) {
       return [];
     }
 
-    const topicsText = recentTopics.map(t => t.name).join(', ');
-
     const prompt = `
 Crie um Simulado de Nível Avançado (Modo Prova) para a Lê.
-Tópicos abordados: ${topicsText}.
+Tópicos abordados: ${recentTopics.map(t => t.name).join(', ')}.
 
 REGRAS:
-1. Retorne APENAS um JSON válido.
-2. Crie 3 questões inéditas e afirmativas baseadas nos tópicos.
-3. Não inclua analogias ou dicas.
-
-FORMATO ESPERADO:
-{
-  "questions": [
-    {
-      "statement": "Enunciado da questão...",
-      "options": { "A": "Opção A", "B": "Opção B", "C": "Opção C", "D": "Opção D" },
-      "answer": "A",
-      "explanation": "Explicação técnica direta."
-    }
-  ]
-}
+1. Crie 3 questões inéditas e afirmativas baseadas nos tópicos.
+2. Não inclua analogias ou dicas.
+3. "explanation" traz uma explicação técnica direta.
 `;
 
     try {
-      const responseText = await QwenProvider.analyzeClassTranscript(prompt);
-      const jsonStart = responseText.indexOf('{');
-      const jsonEnd = responseText.lastIndexOf('}') + 1;
-      
-      if (jsonStart !== -1 && jsonEnd > jsonStart) {
-        const parsed = JSON.parse(responseText.substring(jsonStart, jsonEnd));
-        if (Array.isArray(parsed?.questions)) {
-          return parsed.questions;
-        }
-      }
+      return await GeminiProvider.generateJson(prompt, {
+        systemInstruction: SUN_SYSTEM_INSTRUCTION,
+        schema: questionListJsonSchema,
+        parse: parseQuestionList,
+      });
     } catch (err) {
-      console.error('Erro ao gerar Modo Prova:', err);
+      request.log.error({ err }, 'Erro ao gerar Modo Prova');
+      return [];
     }
-
-    return [];
   });
 
   // Registrar Resposta
-  app.post('/answer', async (request, reply) => {
-    const { questionId, selectedOption } = request.body as any;
+  app.post<{ Body: AnswerBody }>('/answer', { schema: { body: answerBodySchema } }, async (request, reply) => {
+    const { questionId, selectedOption } = request.body;
 
-    const question = await prisma.question.findUnique({ where: { id: questionId } });
+    const [question, user] = await Promise.all([
+      prisma.question.findUnique({ where: { id: questionId } }),
+      prisma.user.findFirst({ where: { name: 'Lê' } }),
+    ]);
     if (!question) {
       return reply.status(404).send({ error: 'Questão não encontrada' });
     }
 
     const isCorrect = question.answer === selectedOption;
     const newCorrectCount = isCorrect ? question.correctCount + 1 : 0;
-    const newIncorrectCount = !isCorrect ? question.incorrectCount + 1 : question.incorrectCount;
     const isMastered = newCorrectCount >= 3;
+    const streakCount = user?.streak ?? 1;
 
-    await prisma.question.update({
-      where: { id: questionId },
-      data: {
-        correctCount: newCorrectCount,
-        incorrectCount: newIncorrectCount,
-        isMastered
-      }
-    });
-
-    const user = await prisma.user.findFirst({ where: { name: 'Lê' } });
-    let currentStreak = user ? user.streak : 1;
-
-    if (isCorrect && user) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { xp: user.xp + 15 }
-      });
-    }
+    await Promise.all([
+      prisma.question.update({
+        where: { id: questionId },
+        data: {
+          correctCount: newCorrectCount,
+          incorrectCount: isCorrect ? undefined : { increment: 1 },
+          isMastered
+        }
+      }),
+      // Incremento atômico: respostas simultâneas não sobrescrevem o XP uma da outra
+      isCorrect && user
+        ? prisma.user.update({ where: { id: user.id }, data: { xp: { increment: 15 } } })
+        : undefined,
+    ]);
 
     const feedback = FeedbackEngine.getFeedback({
       type: isCorrect ? 'CORRECT' : 'INCORRECT',
       difficulty: 'MEDIUM',
-      streakCount: currentStreak
+      streakCount
     });
 
     return {
       isCorrect,
-      streakCount: currentStreak,
+      streakCount,
       feedback: feedback.message,
       explanation: question.explanation,
       isMastered

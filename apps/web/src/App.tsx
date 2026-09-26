@@ -207,7 +207,7 @@ export function App() {
         method: 'POST', body: formData
       });
       const data = await res.json();
-      setClassMessage(data.message || 'Aula enviada com sucesso! ❤️');
+      setClassMessage((res.ok ? data.message : data.error) || (res.ok ? 'Aula enviada com sucesso! ❤️' : 'Erro ao enviar a aula! 😅'));
       fetchClasses();
       fetchTopics();
     } catch (err) {
@@ -229,7 +229,7 @@ export function App() {
         method: 'POST', body: formData
       });
       const data = await res.json();
-      setTaskMessage(data.message || 'Print enviado! 📸');
+      setTaskMessage((res.ok ? data.message : data.error) || (res.ok ? 'Print enviado! 📸' : 'Erro ao enviar o print! 😅'));
       fetchQuestions();
     } catch (err) {
       setTaskMessage('Erro ao enviar o print! 😅');

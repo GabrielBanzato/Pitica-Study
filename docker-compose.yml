@@ -2,7 +2,8 @@
 # Pitica Study - Stack para Portainer (Repository / Git)
 #
 # Portainer (Stack > Environment variables):
-#   TUNNEL_TOKEN = token do Cloudflare Tunnel
+#   TUNNEL_TOKEN   = token do Cloudflare Tunnel
+#   GEMINI_API_KEY = chave da API do Google Gemini
 #
 # Cloudflare (Zero Trust > Tunnels > Public Hostname):
 #   Service: HTTP  ->  web:80
@@ -38,10 +39,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://pitica:piticapassword@postgres:5432/pitica_study?schema=public
-      OLLAMA_URL: http://host.docker.internal:11434
-      QWEN_MODEL: qwen2.5
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
     volumes:
       - uploads:/app/apps/api/uploads
     depends_on:

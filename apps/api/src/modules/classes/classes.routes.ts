@@ -1,48 +1,86 @@
 import { FastifyInstance } from 'fastify';
-import fs from 'fs';
-import path from 'path';
-import util from 'util';
-import { pipeline } from 'stream';
-import { PrismaClient } from '@prisma/client';
-import { AudioService } from './audio.service.js';
+import path from 'node:path';
+import { ensureSubject, prisma } from '../../lib/prisma.js';
+import { FileTooLargeError, sanitizeFilename, saveUpload } from '../../lib/uploads.js';
+import { GeminiProvider } from '../ai/gemini.provider.js';
+import { SUN_SYSTEM_INSTRUCTION } from '../ai/question-generator.service.js';
 import { TranscriptionService } from './transcription.service.js';
-import { QwenProvider } from '../ai/qwen.provider.js';
 
-const pump = util.promisify(pipeline);
-const prisma = new PrismaClient();
+interface ChatBody {
+  topicName: string;
+  topicContext?: string;
+  userQuestion: string;
+}
+
+interface ChatFeedbackBody {
+  topicName?: string;
+  userQuestion?: string;
+  aiAnswer?: string;
+  feedback: 'util' | 'inutil';
+}
+
+const chatBodySchema = {
+  type: 'object',
+  required: ['topicName', 'userQuestion'],
+  properties: {
+    topicName: { type: 'string', minLength: 1 },
+    topicContext: { type: 'string' },
+    userQuestion: { type: 'string', minLength: 1, maxLength: 4000 },
+  },
+} as const;
+
+const chatFeedbackBodySchema = {
+  type: 'object',
+  required: ['feedback'],
+  properties: {
+    topicName: { type: 'string' },
+    userQuestion: { type: 'string' },
+    aiAnswer: { type: 'string' },
+    feedback: { type: 'string', enum: ['util', 'inutil'] },
+  },
+} as const;
+
+const idParamsSchema = {
+  type: 'object',
+  required: ['id'],
+  properties: { id: { type: 'string', format: 'uuid' } },
+} as const;
+
+/** Dispara o processamento da aula sem bloquear a resposta HTTP (o pipeline nunca rejeita). */
+function processInBackground(classId: string, videoPath: string, isReanalysis: boolean) {
+  void TranscriptionService.processClassVideo(classId, videoPath, isReanalysis);
+}
 
 export async function classesRoutes(app: FastifyInstance) {
-  
+
   // 1. Listar todas as aulas
-  app.get('/', async (request, reply) => {
-    const classes = await prisma.class.findMany({
+  app.get('/', async () => {
+    return prisma.class.findMany({
       include: { topics: true },
       orderBy: { createdAt: 'desc' }
     });
-    return classes;
   });
 
-  // 2. Glossário de Tópicos (sem nomes repetidos)
-  app.get('/topics', async (request, reply) => {
-    const topics = await prisma.topic.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+  // 2. Glossário de Tópicos (sem nomes repetidos, mantendo o mais recente)
+  app.get('/topics', async () => {
+    const topics = await prisma.topic.findMany({ orderBy: { createdAt: 'desc' } });
 
-    const uniqueTopics = topics.filter((topic, index, self) =>
-      index === self.findIndex((t) => t.name.toLowerCase().trim() === topic.name.toLowerCase().trim())
-    );
-
-    return uniqueTopics;
+    const unique = new Map<string, (typeof topics)[number]>();
+    for (const topic of topics) {
+      const key = topic.name.toLowerCase().trim();
+      if (!unique.has(key)) unique.set(key, topic);
+    }
+    return [...unique.values()];
   });
 
-// Chat da Sun 🌻 com Higienização de Saída
-  app.post('/topics/chat', async (request, reply) => {
-    const { topicName, topicContext, userQuestion } = request.body as any;
+  // 3. Chat da Sun 🌻
+  app.post<{ Body: ChatBody }>('/topics/chat', { schema: { body: chatBodySchema } }, async (request) => {
+    const { topicName, topicContext, userQuestion } = request.body;
 
-    const prompt = `Você é a Sun 🌻, tutora virtual de Nutrição e Farmacologia da Lê. Responda à aluna de forma meiga, direta e cientificamente correta.
+    const prompt = `Responda à aluna de forma meiga, direta e cientificamente correta.
 
 Tópico: ${topicName}
-Contexto: ${topicContext}
+Contexto: ${topicContext ?? ''}
 Pergunta da Lê: "${userQuestion}"
 
 Regras:
@@ -52,93 +90,87 @@ Regras:
 4. Não inclua títulos, rótulos, graus ou opções de resposta.`;
 
     try {
-      let answer = await QwenProvider.analyzeClassTranscript(prompt);
-
-      // Trava Anti-Vazamento: remove resquícios do prompt se o modelo tentar copiar
-      if (answer.includes('INSTRUÇÃO DE SISTEMA:')) {
-        answer = answer.split('INSTRUÇÃO DE SISTEMA:')[0];
-      }
-      answer = answer
-        .replace(/\*\*GRAU \d+:\*\*/g, '')
-        .replace(/INSTRUÇÃO DE SISTEMA:?/gi, '')
-        .replace(/DÚVIDA DA LÊ:?/gi, '')
-        .replace(/RESPOSTA:?/gi, '')
-        .trim();
-
-    return { answer };
+      const answer = await GeminiProvider.generateText(prompt, {
+        systemInstruction: `${SUN_SYSTEM_INSTRUCTION} Você é tutora virtual de Nutrição e Farmacologia.`,
+      });
+      return { answer };
     } catch (err) {
-      console.error('Erro no chat da Sun:', err);
+      request.log.error({ err }, 'Erro no chat da Sun');
       return { answer: 'Tive um pequeno probleminha no meu jardim agora! 🌻 Pode perguntar de novo, Lê?' };
     }
   });
 
   // 4. Registro de Feedback de utilidade
-  app.post('/topics/chat/feedback', async (request, reply) => {
-    const { topicName, userQuestion, aiAnswer, feedback } = request.body as any;
-    console.log(`📊 [Sun Feedback - ${feedback?.toUpperCase()}] Tópico: ${topicName} | Pergunta: ${userQuestion}`);
-    return { success: true, message: 'Feedback registrado com sucesso! 🌻' };
-  });
+  app.post<{ Body: ChatFeedbackBody }>(
+    '/topics/chat/feedback',
+    { schema: { body: chatFeedbackBodySchema } },
+    async (request) => {
+      const { topicName, userQuestion, feedback } = request.body;
+      request.log.info({ feedback, topicName, userQuestion }, '📊 Feedback da Sun');
+      return { success: true, message: 'Feedback registrado com sucesso! 🌻' };
+    },
+  );
 
   // 5. Reanalisar aula existente
-  app.post('/reanalyze/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const classData = await prisma.class.findUnique({ where: { id } });
+  app.post<{ Params: { id: string } }>(
+    '/reanalyze/:id',
+    { schema: { params: idParamsSchema } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const classData = await prisma.class.findUnique({ where: { id } });
 
-    if (!classData || !classData.videoPath) {
-      return reply.status(404).send({ error: 'Aula não encontrada.' });
-    }
+      if (!classData?.videoPath) {
+        return reply.status(404).send({ error: 'Aula não encontrada.' });
+      }
 
-    AudioService.extractAudio(classData.videoPath)
-      .then(async (audioPath) => {
-        await TranscriptionService.processClassAudio(id, audioPath, true);
-      })
-      .catch(async () => {
-        await prisma.class.update({ where: { id }, data: { status: 'FAILED' } });
-      });
-
-    return { message: 'Reanalisando a aula em busca de novos subtópicos! 🔍✨' };
-  });
+      processInBackground(id, classData.videoPath, true);
+      return { message: 'Reanalisando a aula em busca de novos subtópicos! 🔍✨' };
+    },
+  );
 
   // 6. Upload de novas aulas
   app.post('/upload', async (request, reply) => {
-    const data = await request.file();
-    if (!data) return reply.status(400).send({ error: 'Nenhum arquivo recebido! 😅' });
+    const file = await request.file();
+    if (!file) return reply.status(400).send({ error: 'Nenhum arquivo recebido! 😅' });
 
-    const existingClass = await prisma.class.findFirst({ where: { title: data.filename } });
+    // O título é trocado pelo gerado pela IA; a duplicidade é checada pelo nome salvo no disco (<timestamp>-<nome>)
+    const safeName = sanitizeFilename(file.filename);
+    const candidates = await prisma.class.findMany({
+      where: { videoPath: { endsWith: `-${safeName}` } },
+      select: { id: true, videoPath: true },
+    });
+    const existingClass = candidates.find(
+      (c) => c.videoPath && path.basename(c.videoPath).replace(/^\d+-/, '') === safeName,
+    );
     if (existingClass) {
-      return reply.status(200).send({
+      file.file.resume(); // descarta o restante do upload para liberar a requisição
+      return {
         message: 'Esta aula já foi enviada anteriormente! Para buscar novos subtópicos, use o botão "Analisar Novamente". 🎥✨',
         classId: existingClass.id
-      });
+      };
     }
 
-    const uploadDir = path.join(process.cwd(), 'uploads', 'classes');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    let savePath: string;
+    try {
+      savePath = await saveUpload(file, 'classes');
+    } catch (err) {
+      if (err instanceof FileTooLargeError) {
+        return reply.status(413).send({ error: 'Vídeo grande demais! O limite é 500 MB. 😅' });
+      }
+      throw err;
+    }
 
-    const filename = `${Date.now()}-${data.filename}`;
-    const savePath = path.join(uploadDir, filename);
-    await pump(data.file, fs.createWriteStream(savePath));
-
-    let subject = await prisma.subject.findFirst();
-    if (!subject) subject = await prisma.subject.create({ data: { name: 'Nutrição Base' } });
-
+    const subject = await ensureSubject();
     const newClass = await prisma.class.create({
       data: {
-        title: data.filename,
+        title: file.filename,
         subjectId: subject.id,
         videoPath: savePath,
         status: 'PROCESSING'
       }
     });
 
-    AudioService.extractAudio(savePath)
-      .then(async (audioPath) => {
-        await TranscriptionService.processClassAudio(newClass.id, audioPath, false);
-      })
-      .catch(async () => {
-        await prisma.class.update({ where: { id: newClass.id }, data: { status: 'FAILED' } });
-      });
-
+    processInBackground(newClass.id, savePath, false);
     return { message: 'Aula recebida! A Sunfl.IA.wer já está preparando os tópicos pra você! 🎥✨', classId: newClass.id };
   });
 }
