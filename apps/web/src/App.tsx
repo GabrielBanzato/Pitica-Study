@@ -60,7 +60,7 @@ export function App() {
 
   const fetchDashboard = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/analytics/dashboard');
+      const res = await fetch('/api/analytics/dashboard');
       const data = await res.json();
       setAnalytics(data);
     } catch (err) {
@@ -70,7 +70,7 @@ export function App() {
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/learning/session');
+      const res = await fetch('/api/learning/session');
       const data = await res.json();
       setQuestions(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -81,7 +81,7 @@ export function App() {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/classes');
+      const res = await fetch('/api/classes');
       const data = await res.json();
       setClassList(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -92,7 +92,7 @@ export function App() {
 
   const fetchTopics = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/classes/topics');
+      const res = await fetch('/api/classes/topics');
       const data = await res.json();
       setTopicsList(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -114,7 +114,7 @@ export function App() {
     try {
       const topicContext = selectedTopic.academicText || selectedTopic.summary || selectedTopic.fashionText;
 
-      const res = await fetch('http://localhost:3000/api/classes/topics/chat', {
+      const res = await fetch('/api/classes/topics/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,7 +146,7 @@ export function App() {
 
     try {
       const lastUserMsg = chatMessages.find(m => m.sender === 'user')?.text || '';
-      await fetch('http://localhost:3000/api/classes/topics/chat/feedback', {
+      await fetch('/api/classes/topics/chat/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -169,7 +169,7 @@ export function App() {
     setExamScore(0);
     setExamSelected(null);
     try {
-      const res = await fetch('http://localhost:3000/api/learning/exam-session');
+      const res = await fetch('/api/learning/exam-session');
       const data = await res.json();
       setExamQuestions(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -203,7 +203,7 @@ export function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://localhost:3000/api/classes/upload', {
+      const res = await fetch('/api/classes/upload', {
         method: 'POST', body: formData
       });
       const data = await res.json();
@@ -225,7 +225,7 @@ export function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://localhost:3000/api/tasks/upload', {
+      const res = await fetch('/api/tasks/upload', {
         method: 'POST', body: formData
       });
       const data = await res.json();
@@ -243,7 +243,7 @@ export function App() {
     const currentQ = questions[currentIndex];
 
     try {
-      const res = await fetch('http://localhost:3000/api/learning/answer', {
+      const res = await fetch('/api/learning/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -750,7 +750,7 @@ export function App() {
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                     <button
                       onClick={async () => {
-                        await fetch(`http://localhost:3000/api/classes/reanalyze/${c?.id}`, { method: 'POST' });
+                        await fetch(`/api/classes/reanalyze/${c?.id}`, { method: 'POST' });
                         alert('Reanálise iniciada! A Sunfl.IA.wer buscará novos subtópicos.');
                         fetchClasses();
                       }}

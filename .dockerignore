@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/.env
+**/uploads
+.git
+*.log
+*.bat
+*.ps1

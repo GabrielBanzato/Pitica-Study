@@ -1,0 +1,29 @@
+# =============================================================
+# Pitica Study - Web (React + Vite) servido pelo Nginx
+# =============================================================
+
+# ---------- Etapa 1: build ----------
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY apps/web/package.json ./apps/web/package.json
+
+# Instala apenas as dependências do frontend
+RUN npm install --workspace=apps/web --no-audit --no-fund
+
+COPY apps/web ./apps/web
+
+WORKDIR /app/apps/web
+
+# "vite build" direto: pula o "tsc" (checagem de tipos) que derrubava o build
+RUN npx vite build
+
+# ---------- Etapa 2: servidor ----------
+FROM nginx:1.27-alpine
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

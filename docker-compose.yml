@@ -1,54 +1,87 @@
-version: '3.8'
+# =============================================================
+# Pitica Study - Stack para Portainer (Repository / Git)
+#
+# Variáveis de ambiente a definir no Portainer (Stack > Environment variables):
+#   POSTGRES_PASSWORD   senha do banco (obrigatória)
+#   TUNNEL_TOKEN        token do Cloudflare Tunnel (obrigatória)
+#   OLLAMA_URL          opcional (padrão: Ollama rodando no host)
+#   QWEN_MODEL          opcional (padrão: qwen2.5)
+#
+# No painel da Cloudflare (Zero Trust > Tunnels > Public Hostname):
+#   Service: HTTP  ->  web:80
+# =============================================================
 
 services:
   postgres:
     image: postgres:16-alpine
     container_name: pitica_study_db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: pitica
-      POSTGRES_PASSWORD: piticapassword
+      POSTGRES_USER: ${POSTGRES_USER:-pitica}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no Portainer}
       POSTGRES_DB: pitica_study
-    ports:
-      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pitica} -d pitica_study"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - pitica_net
 
   api:
     build:
-      context: https://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@github.com/GabrielBanzato/Pitica-Study.git#main
-      dockerfile: apps/api/Dockerfile
+      context: .
+      dockerfile: Dockerfile.api
+    image: pitica-study-api:latest
     container_name: pitica_api
-    restart: always
+    restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - DATABASE_URL=postgresql://pitica:piticapassword@postgres:5432/pitica_study
-      - GEMINI_API_KEY=AQ.Ab8RN6LZtKkiXX0bapP2paeKo56ZPR8hOMZzRqSiiuzuaN4Yyw
-    ports:
-      - "3000:3000"
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pitica}:${POSTGRES_PASSWORD}@postgres:5432/pitica_study?schema=public
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen2.5}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - uploads:/app/apps/api/uploads
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - pitica_net
 
   web:
     build:
-      context: https://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@github.com/GabrielBanzato/Pitica-Study.git#main
-      dockerfile: apps/web/Dockerfile
+      context: .
+      dockerfile: Dockerfile.web
+    image: pitica-study-web:latest
     container_name: pitica_web
-    restart: always
+    restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8080:80"   # acesso local na rede; remova se quiser só via Tunnel
     depends_on:
       - api
     networks:
       - pitica_net
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: pitica_tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN no Portainer}
+    depends_on:
+      - web
+    networks:
+      - pitica_net
+
 volumes:
   pgdata:
+  uploads:
 
 networks:
   pitica_net:
