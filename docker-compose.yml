@@ -1,6 +1,9 @@
 # =============================================================
 # Pitica Study - Stack para Portainer (Repository / Git)
 #
+# Portainer (Stack > Environment variables):
+#   TUNNEL_TOKEN = token do Cloudflare Tunnel
+#
 # Cloudflare (Zero Trust > Tunnels > Public Hostname):
 #   Service: HTTP  ->  web:80
 # =============================================================
@@ -54,8 +57,10 @@ services:
     pull_policy: build
     container_name: pitica_web
     restart: unless-stopped
+    expose:
+      - "80"        # acessível na rede interna como web:80 (usado pelo tunnel)
     ports:
-      - "8080:80"
+      - "8080:80"   # acesso direto na rede local (opcional)
     depends_on:
       - api
     networks:
@@ -65,7 +70,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: pitica_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token SEU_TOKEN_AQUI
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     depends_on:
       - web
     networks:
